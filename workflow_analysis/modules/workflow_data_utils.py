@@ -186,10 +186,12 @@ def get_wf_result_df(tests: str, wf_params: List[str], target_tasks: List[str],
     wf_df = pd.DataFrame(columns=wf_params)
 
     # Identify trial folders
+    # FIXME: change this format
     wf_trial_folders = [
         folder for folder in glob.glob(f"{tests}/*")
         if folder.endswith(("t1", "t2", "t3"))
     ]
+    
     if debug:
         print(f"Trial folders: {wf_trial_folders}")
 
@@ -203,7 +205,7 @@ def get_wf_result_df(tests: str, wf_params: List[str], target_tasks: List[str],
         workflow_csv = os.path.join(trial_folder, csv_filename)
         if len(blk_files) == 0 and len(datalife_monitor) == 0 and os.path.exists(workflow_csv):
             if debug:
-                print(f"Loading pre-processed workflow data from: {workflow_csv}")
+                print(f"WARNING: Loading pre-processed workflow data from: {workflow_csv}")
             try:
                 csv_df = pd.read_csv(workflow_csv)
                 # Ensure all required columns exist
