@@ -147,20 +147,29 @@ def add_stat_to_df(trial_folder: str, monitor_timer_stat_io: List,
     # List all files in the trial folder
     all_files = os.listdir(trial_folder)
     
-    # Find matching files using substring matching
+    # Find matching files using patterns with and without ".local"
+    candidate_patterns = [
+        f"{fileName}.{task_pid}.local.{op}_blk_trace.json",
+        f"{fileName}.{task_pid}.{op}_blk_trace.json",
+    ]
     matching_files = [
         os.path.join(trial_folder, file)
         for file in all_files
-        if f"{fileName}.{task_pid}.local.{op}" in file
+        if any(pat in file for pat in candidate_patterns)
     ]
     
-    # Process matching files to determine write pattern
+    # Process matching files to determine write pattern and capture optional task_name
     write_pattern = 0  # 0: seq, 1: rand
+    detected_task_name = None
     for matching_file in matching_files:
         try:
             with open(matching_file) as f:
                 w_blk_trace_data = json.load(f)
                 blk_list = w_blk_trace_data.get('io_blk_range', [])
+                # Capture task_name if present in the new blk_trace schema
+                tn = w_blk_trace_data.get('task_name')
+                if isinstance(tn, str) and tn.strip():
+                    detected_task_name = tn.strip()
                 
                 # Validate blk_list length
                 if len(blk_list) >= 4:
@@ -178,6 +187,8 @@ def add_stat_to_df(trial_folder: str, monitor_timer_stat_io: List,
     
     # Update statistics
     tmp_write_stat['randomOffset'] = write_pattern
+    if detected_task_name:
+        tmp_write_stat['taskName'] = detected_task_name
     
     return tmp_write_stat
 
@@ -268,6 +279,9 @@ def get_wf_result_df(tests: str, wf_params: List[str], target_tasks: List[str],
                     1 if op_type == "read" else 0,
                     fname, task_pid, store_code, debug
                 )
+                # If blk-trace did not provide task_name, use datalife task_name
+                if not tmp_stat.get('taskName') and isinstance(task_name, str) and task_name.strip():
+                    tmp_stat['taskName'] = task_name.strip()
                 # Use concat instead of _append to avoid fragmentation warnings
                 new_row = pd.DataFrame([tmp_stat])
                 wf_df = pd.concat([wf_df, new_row], ignore_index=True)
@@ -426,7 +440,10 @@ def _assign_basic_task_info(wf_df: pd.DataFrame, all_wf_dict: Dict, task_order_d
     if all_wf_dict:
         for task_pid, task_info in all_wf_dict.items():
             mask = wf_df['taskPID'] == task_pid
-            wf_df.loc[mask, 'taskName'] = task_info['taskName']
+            # Only overwrite taskName if mapping provides a non-empty value
+            mapped_name = task_info.get('taskName', '')
+            if isinstance(mapped_name, str) and mapped_name.strip():
+                wf_df.loc[mask, 'taskName'] = mapped_name
             wf_df.loc[mask, 'prevTask'] = task_info.get('prevTask', '')
             wf_df.loc[mask, 'stageOrder'] = task_info.get('stage_order', 1)
     
