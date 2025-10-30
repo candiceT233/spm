@@ -100,7 +100,9 @@ def get_stat_file_pids(all_files: List[str]) -> List[str]:
         # Split filename by '.'
         parts = filename.split('.')
         if len(parts) >= 3:
-            # Get the target task from the -3 extension
+            # Expected pattern: <name>.<pid>.<r|w>_blk_trace.json
+            # Example: 1-diff....43088-dc065.r_blk_trace.json
+            # PID is the third element from the end
             task = parts[-3]
             target_tasks.add(task)
     return sorted(target_tasks)
@@ -747,6 +749,10 @@ def expand_df(wf_df: pd.DataFrame, num_nodes_list: List[int]) -> pd.DataFrame:
             
             # Append the updated row to the list
             updated_rows.append(new_row)
+
+    # If expansion failed for all rows (e.g., missing parallelism), return original DataFrame
+    if len(updated_rows) == 0:
+        return wf_df.reset_index(drop=True)
 
     # Create a new DataFrame with the updated rows
     expanded_df = pd.DataFrame(updated_rows)
