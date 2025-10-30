@@ -729,7 +729,22 @@ def expand_df(wf_df: pd.DataFrame, num_nodes_list: List[int]) -> pd.DataFrame:
     - DataFrame: Expanded DataFrame with rows for each node configuration
     """
     import math
-    
+
+    # If nothing to expand, return early
+    if wf_df.empty:
+        return wf_df
+
+    # Ensure parallelism column exists and has defaults
+    if 'parallelism' not in wf_df.columns:
+        wf_df['parallelism'] = 1
+    wf_df['parallelism'] = wf_df['parallelism'].fillna(1)
+
+    # Trivial case: only one node (1) and parallelism is 1 across rows ⇒ no expansion
+    if len(num_nodes_list) == 1 and num_nodes_list[0] == 1 and (wf_df['parallelism'] == 1).all():
+        wf_df['numNodes'] = 1
+        wf_df['tasksPerNode'] = 1
+        return wf_df.reset_index(drop=True)
+
     # Create a new DataFrame to store updated rows
     updated_rows = []
 
@@ -750,8 +765,11 @@ def expand_df(wf_df: pd.DataFrame, num_nodes_list: List[int]) -> pd.DataFrame:
             # Append the updated row to the list
             updated_rows.append(new_row)
 
-    # If expansion failed for all rows (e.g., missing parallelism), return original DataFrame
+    # If expansion failed for all rows, apply sensible defaults and return original
     if len(updated_rows) == 0:
+        default_nodes = num_nodes_list[0] if len(num_nodes_list) > 0 else 1
+        wf_df['numNodes'] = default_nodes
+        wf_df['tasksPerNode'] = wf_df['parallelism'].apply(lambda p: math.ceil(p / default_nodes))
         return wf_df.reset_index(drop=True)
 
     # Create a new DataFrame with the updated rows
